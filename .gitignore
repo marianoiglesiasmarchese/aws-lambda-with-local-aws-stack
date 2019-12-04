@@ -246,3 +246,9 @@ localstack/data
 */build/*
 
 # End of https://www.gitignore.io/api/osx,linux,python,windows,pycharm,visualstudiocode
+
+# pycharm things
+.idea
+
+# logs
+logs

@@ -1,42 +1,33 @@
 import json
+import logging
+import os
+import boto3
+import pandas as pd
 
-# import requests
-
+# setup logger
+logger = logging.getLogger()
+logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO').upper())
 
 def lambda_handler(event, context):
-    """Sample pure Lambda function
 
-    Parameters
-    ----------
-    event: dict, required
-        API Gateway Lambda Proxy Input Format
+    for records in event.get('Records'):
+        s3_event = json.loads(records['body'])
 
-        Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+        logger.debug("##### s3_event")
+        logger.debug(s3_event)
 
-    context: object, required
-        Lambda Context runtime methods and attributes
+    s3_bucket = s3_event.get("bucket")
+    s3_key = s3_event.get("key")
 
-        Context doc: https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
+    boto_client = boto3.client('s3', aws_access_key_id='key', aws_secret_access_key='secret', endpoint_url='http://localstack:4572')
 
-    Returns
-    ------
-    API Gateway Lambda Proxy Output Format: dict
+    obj = boto_client.get_object(Bucket=s3_bucket,
+                        Key=s3_key)
 
-        Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
-    """
-
-    # try:
-    #     ip = requests.get("http://checkip.amazonaws.com/")
-    # except requests.RequestException as e:
-    #     # Send some context about this error to Lambda Logs
-    #     print(e)
-
-    #     raise e
+    csv_file_df = pd.read_csv(obj['Body'])
+    logger.info(csv_file_df)
 
     return {
         "statusCode": 200,
-        "body": json.dumps({
-            "message": "hello world",
-            # "location": ip.text.replace("\n", "")
-        }),
+        "body": csv_file_df.to_json()
     }

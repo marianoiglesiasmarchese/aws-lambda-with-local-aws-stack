@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+
+# first at all, give me 755 execute permissions with:  `chmod 755 run` - this allows only the owner of the file to execute the script
+
+#enable stop at error
+set -e
+
+REGION=us-east-1
+LOCALSTACK_NETWORK=localstack_default
+
+if [ "$*" == "" ]; then
+  echo " >>> missing command"
+fi
+
+
+build_in_container(){
+	echo " >>> Building inner lambda container..."
+	sam build --use-container
+	#TODO define if it is neccessary
+	#docker build --quiet --file builds/Dockerfile  -t sam-builder builds/ && \
+	#FIXME try to avoid root user, use current user instead
+	#	docker run --env USER=root --rm --volume $PWD:/code -t sam-builder
+}
+
+build(){
+	echo " >>> Building..."
+	sam build
+}
+
+start_api(){
+	sam local start-api --region $REGION --env-vars local.env.json  --host 0.0.0.0 --docker-network c2-manifest-network
+}
+
+run_tests(){
+  docker build --quiet --build-arg USER=$USER  --file tests/Dockerfile --tag sam-app-tester tests && \
+		#-t is to allocate a terminal, this way it can show colors, progress bars, etc properly
+  	  docker run --rm --env USER=$USER -t --volume $PWD:/code sam-app-tester
+}
+
+
+invoke(){
+  #it is gonna call the only defined function
+  [ ! -d "$PWD/logs" ] && mkdir $PWD/logs && echo " >>> logs folder created"
+  sam local invoke --skip-pull-image --event events/sqs_event.json --region $REGION --env-vars local.env.json --docker-network $LOCALSTACK_NETWORK 2>&1 | tee logs/sam-local-invoke-$(date +"%Y-%m-%d-%H-%M").log
+}
+
+
+for cmd in $*; do
+  case $cmd in
+	build)
+		build_in_container
+		echo " >>> built"
+		;;
+	local-build)
+	  	build
+		echo " >>> built"
+		;;
+	start-api)
+	  	build_in_container
+		start_api
+		;;
+	start-api-local-build)
+	  	build
+		start_api
+		;;
+	test*)
+	  	build_in_container
+		run_tests
+		;;
+	test-loca-build*)
+	  	build
+		run_tests
+		;;
+	invoke)
+	  	build_in_container
+		invoke
+		;;
+	invoke-local-build)
+	  	build
+		invoke
+		;;
+	help) Available commands: build local-build start-api start-api-local-build test test-local-build invoke invoke-local-build help
+  esac
+done
